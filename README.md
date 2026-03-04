@@ -153,7 +153,7 @@ All results are saved to the `output/` directory:
 - **Categorical analysis:** Jaccard overlap ratio, Cramér's V, χ² p-value (shared levels)
 - **Traffic-light verdict:** Green (✅), Yellow (⚠️), or Red (❌) with handling recommendations
 
-### Linear Mixed Model (Section 2.5.3)
+### Linear Mixed Model (Method subsection)
 
 ```
 log(los_days + 1) ~ 1 + (1 | icd3)
@@ -164,7 +164,7 @@ log(los_days + 1) ~ 1 + (1 | icd3)
 - **Estimation:** REML for variance components; ML for AIC/BIC comparison
 - **Rationale:** LMM handles hundreds of ICD-3 categories via shrinkage, avoiding the overfitting and instability of fixed-effect GLMs with high-cardinality categorical predictors
 
-### Reproducibility Assessment (Section 2.5.4)
+### Reproducibility Assessment (Method subsection)
 
 Five dimensions of reproducibility are evaluated across k-levels:
 
