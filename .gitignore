@@ -1,0 +1,25 @@
+# Data files (not shared for privacy)
+data/*.csv
+data/*.rds
+
+# R artifacts
+.Rhistory
+.Rdata
+.RData
+.Rproj.user/
+*.Rproj
+
+# Output files (regenerable)
+output/*.pdf
+output/*.png
+output/*.csv
+output/*.rds
+output/*.docx
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

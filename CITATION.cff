@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+title: "Quantifying the Impact of k-Anonymization on Clinical Data Quality"
+message: "If you use this software, please cite the accompanying paper."
+type: software
+authors:
+  - given-names: Gaetan
+    family-names: Kamdje Wabo
+    affiliation: >-
+      Department of Biomedical Informatics,
+      Medical Faculty Mannheim, Heidelberg University
+license: MIT
+repository-code: https://github.com/YOUR_USERNAME/anonymization-impact-study
+preferred-citation:
+  type: article
+  authors:
+    - given-names: Gaetan
+      family-names: Kamdje Wabo
+  title: >-
+    Quantifying the Impact of Anonymization-Induced Clinical Data Quality Loss:
+    An Advanced Methodological Study Using Primary Diagnosis Codes and Hospital
+    Length of Stay
+  journal: "JMIR Medical Informatics"
+  year: 2026
