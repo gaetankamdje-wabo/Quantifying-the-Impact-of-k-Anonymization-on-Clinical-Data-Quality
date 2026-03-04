@@ -9,7 +9,7 @@ authors:
       Department of Biomedical Informatics,
       Medical Faculty Mannheim, Heidelberg University
 license: MIT
-repository-code: https://github.com/YOUR_USERNAME/anonymization-impact-study
+repository-code: https://github.com/gaetankamdje-wabo/Quantifying-the-Impact-of-k-Anonymization-on-Clinical-Data-Quality
 preferred-citation:
   type: article
   authors:
