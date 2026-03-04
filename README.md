@@ -2,7 +2,7 @@
 
 **Companion code** for the manuscript:
 
-> Kamdje Wabo, G. *Quantifying the Impact of Anonymization-Induced Clinical Data Quality Loss: An Advanced Methodological Study Using Primary Diagnosis Codes and Hospital Length of Stay.* JMIR Medical Informatics (under review), 2026.
+> Kamdje Wabo, G. *Quantifying the Impact of Anonymization-Induced Clinical Data Quality Loss: A Comprehensive Methodological Study Using Primary Diagnosis Codes and Hospital Length of Stay.* JMIR Medical Informatics (under review), 2026.
 
 ---
 
