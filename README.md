@@ -32,6 +32,7 @@ The analysis proceeds in three stages:
 │   └── test_results_report.json          # 30 unit tests (all passed)
 ├── data/                                 # Place your CSV files here (not included)
 ├── output/                               # Generated tables, figures, .rds files
+├── ARX certificates/                     # Generated based on local data anonymization by using ARX tool
 ├── LICENSE
 ├── CITATION.cff
 └── README.md
