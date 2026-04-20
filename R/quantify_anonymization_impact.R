@@ -10,29 +10,7 @@
 #     (missing delta, Jaccard overlap ratio, chi-square p over shared levels)
 #  4. Ad-hoc single-column comparison with plain-language interpretation and
 #     traffic-light verdict / handling recommendation
-#
-# Corrections vs. prior version (all backward-compatible in behaviour):
-#  - Parameter typos fixed: `orgin` → `origin`, `anonimzed` → `anonymized`.
-#    Old names retained as deprecated aliases via `...` forwarding.
-#  - `cramers_v_tbl`: local variable `c` renamed to `nc` to avoid shadowing
-#    base::c().
-#  - `sprintf("%d%%", round(...))`: `%d` requires integer type; changed to
-#    `sprintf("%.0f%%", ...)` which accepts numeric correctly.
-#  - Ad-hoc alignment: raw pre-alignment lengths are now captured before
-#    truncation so `N_total_Delta` in the display table is accurate.
-#  - `fmt_p` guard: explicit `p == 0L` check added before the
-#    `< .Machine$double.xmin` comparison for clarity (both catch underflow,
-#    but intent is now unambiguous).
-#  - `ks_test_asymp` callers in extended numeric analysis now pass
-#    `na.omit()`-cleaned vectors explicitly rather than relying on the
-#    internal `is.finite()` guard silently removing NAs.
-#  - `safe_stat` guard: `v[is.finite(v)]` already excludes NA/NaN/Inf, so
-#    `na.rm = TRUE` is now removed from the inner call to avoid conveying
-#    false intent (result is identical; removed for methodological clarity).
-#  - Chi-square note: the extended categorical chi-square is intentionally
-#    computed over shared levels only (matching app behaviour); categories
-#    exclusive to either dataset do not contribute to the test statistic.
-#    This is now documented explicitly in the `notes` output slot.
+
 #
 # Returns a named list with slots:
 #   $column_comparison       data.frame
