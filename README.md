@@ -152,7 +152,7 @@ All results are saved to the `output/` directory:
 - **Column presence:** Detects added/removed columns
 - **Numeric analysis:** KS D statistic, √(n_eff)·D signal gauge, min/max/mean/SD shifts
 - **Categorical analysis:** Jaccard overlap ratio, Cramér's V, χ² p-value (shared levels)
-- **Traffic-light verdict:** Green (✅), Yellow (⚠️), or Red (❌) with handling recommendations
+- **Traffic-light verdict:** Green, Yellow, or Red with handling recommendations
 
 ### Linear Mixed Model (Method subsection)
 
