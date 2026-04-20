@@ -1,4 +1,3 @@
-cff-version: 1.2.0
 title: "Quantifying the Impact of k-Anonymization on Clinical Data Quality"
 message: "If you use this software, please cite the accompanying paper."
 type: software
@@ -17,7 +16,7 @@ preferred-citation:
       family-names: Kamdje Wabo
   title: >-
     Quantifying the Impact of Anonymization-Induced Clinical Data Quality Loss:
-    An Advanced Methodological Study Using Primary Diagnosis Codes and Hospital
+    Methodological Study Using Primary Diagnosis Codes and Hospital
     Length of Stay
   journal: "JMIR Medical Informatics"
   year: 2026
