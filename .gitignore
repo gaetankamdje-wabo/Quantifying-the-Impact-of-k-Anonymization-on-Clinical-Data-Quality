@@ -23,3 +23,7 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Default analysis output location (DATA_DIR/study_results_updated) and checkpoints
+study_results_updated/
+**/.ckpt_*.rds

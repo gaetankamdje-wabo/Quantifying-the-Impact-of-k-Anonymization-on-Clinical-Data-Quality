@@ -2,38 +2,49 @@
 
 **Companion code** for the manuscript:
 
-> Kamdje Wabo, G. *Quantifying the Impact of Anonymization-Induced Clinical Data Quality Loss:  Methodological Study Using Primary Diagnosis Codes and Hospital Length of Stay.* JMIR Medical Informatics (under review), 2026.
+> Kamdje Wabo, G. *Quantifying the Impact of Anonymization-Induced Clinical Data Quality Loss: A Methodological Case Study Using Primary Diagnosis Codes and Hospital Length of Stay.* JMIR Medical Informatics (under review), 2026.
 
 ---
 
 ## Overview
 
-This repository provides the complete R analysis pipeline for a study that systematically measures how **ARX k-anonymity** (k = 5, 10, 15) with cell-level suppression affects the statistical utility of hospital encounter data — specifically **ICD-10-GM primary diagnosis codes** and **length of stay (LOS)**.
+This repository contains the complete R analysis pipeline for a methodological case study that measures how **ARX k-anonymity** (k = 5, 10, 15) affects the analytical utility of two of the most frequently used elements in retrospective hospital research: **ICD-10-GM primary diagnosis codes** and **hospital length of stay (LOS)**.
 
-The analysis proceeds in three stages:
+Anonymization in this study uses **cell-level suppression combined with microaggregation**. No rows are deleted. ARX replaces individual quasi-identifier values with a missing token (`*`) until the k-anonymity threshold is met. The analysis quantifies the resulting distributional and inferential distortion and shows that meaningful distortion can occur that the anonymization tool itself does not report.
+
+The pipeline proceeds in three stages.
 
 | Stage | Script | Purpose |
 |-------|--------|---------|
-| **1. Core function** | `R/quantify_anonymization_impact.R` | Reusable R function: column presence checks, numeric distributional analysis (KS D, mean/SD shifts), categorical analysis (Jaccard overlap, Cramér's V, χ²), and traffic-light verdicts |
-| **2. Cohort description** | `R/cohort_description.R` | Descriptive statistics and publication-ready figures for the original hospital encounter dataset |
-| **3. Main analysis** | `R/final_analysis.R` | Full impact analysis: runs Stage 1 across k = 5/10/15, generates 15+ scholarly figures, fits Linear Mixed Models (LMM), and assesses statistical reproducibility |
+| **1. Core function** | `R/quantify_anonymization_impact.R` | Reusable, base-R function. Column-presence checks, numeric distributional analysis (KS D, scaled statistic z = sqrt(n_eff)*D, mean/SD shifts), categorical analysis (Jaccard overlap, Cramer V, chi-square over shared levels), and traffic-light verdicts. |
+| **2. Cohort description** | `R/cohort_description.R` | Descriptive statistics and a publication-ready summary table for the original hospital encounter dataset. |
+| **3. Main analysis** | `R/final_analysis.R` | Full impact analysis. Runs Stage 1 across k = 5/10/15, documents cell suppression, fits a three-level linear mixed model, assesses inferential reproducibility, and writes all figures, tables, and a results bundle. |
+
+A standalone test suite (`R/test_quantify_anonymization_impact.R`) validates the core function.
 
 ---
 
-## Repository Structure
+## Repository structure
 
 ```
 .
 ├── R/
-│   ├── quantify_anonymization_impact.R   # Core comparison function (660 lines)
-│   ├── cohort_description.R              # Cohort characterization (338 lines)
-│   └── final_analysis.R                  # Main analysis pipeline (2106 lines)
+│   ├── quantify_anonymization_impact.R        # Core comparison function (base R only)
+│   ├── cohort_description.R                    # Cohort characterization (Stage 2)
+│   ├── final_analysis.R                        # Main analysis pipeline (Stage 3)
+│   └── test_quantify_anonymization_impact.R    # Unit-test script for the core function
 ├── tests/
-│   └── test_results_report.json          # 30 unit tests (all passed)
-├── data/                                 # Place your CSV files here (not included)
-├── output/                               # Generated tables, figures, .rds files
-├── ARX certificates/                     # Generated based on local data anonymization by using ARX tool
-├── LICENSE
+│   └── test_results_report.json                # 42 unit-test results (all passed)
+├── ARX certificates/
+│   ├── Multimedia Appendix 1 - 5-anonymized data certificate.pdf
+│   ├── Multimedia Appendix 2 - 10-anonymized data certificate.pdf
+│   └── Multimedia Appendix 3 - 15-anonymized data certificate.pdf
+├── ADAQI Checklist/
+│   ├── Multimedia Appendix 6 - ADAQI Checklist Template.pdf      # Blank template
+│   └── Multimedia Appendix 7 - ADAQI Checklist filled out.pdf    # Worked example (this study)
+├── data/                                       # Place input CSVs here (not included; see Data)
+├── output/                                     # Generated figures, tables, .rds (created on run)
+├── LICENSE                                     # MIT
 ├── CITATION.cff
 └── README.md
 ```
@@ -42,172 +53,208 @@ The analysis proceeds in three stages:
 
 ## Requirements
 
-**R version:** ≥ 4.1.0
+**R version:** >= 4.1.0
 
-**Packages:**
-
-| Package | Purpose | Stage |
-|---------|---------|-------|
-| `data.table` | Fast data manipulation | 2 |
-| `ggplot2` | Publication-quality plots | 2 |
-| `flextable` | Word-compatible tables | 2 |
-| `officer` | DOCX export | 2 |
-| `lme4` | Linear Mixed Models | 3 |
-| `scales` | Axis formatting | 2 |
-
-Install all dependencies:
+| Package | Used by | Purpose |
+|---------|---------|---------|
+| `lme4` | `final_analysis.R` | Linear mixed models |
+| `data.table` | `cohort_description.R` | Fast data manipulation |
+| `flextable` | `cohort_description.R` | Word-compatible summary table |
+| `officer` | `cohort_description.R` | DOCX export |
 
 ```r
-install.packages(c("data.table", "ggplot2", "flextable", "officer", "lme4", "scales"))
+install.packages(c("lme4", "data.table", "flextable", "officer"))
 ```
 
-No additional packages are needed. Stage 1 (`quantify_anonymization_impact.R`) and the core of Stage 3 use **base R only** to ensure zero-dependency reproducibility.
+The core function (`quantify_anonymization_impact.R`) and the impact and reproducibility logic in `final_analysis.R` use **base R only** for zero-dependency reproducibility. Only the mixed-model fit requires `lme4`, and only the cohort summary table requires `data.table`, `flextable`, and `officer`.
 
 ---
 
 ## Data
 
-The study uses hospital encounter data from **Universitätsmedizin Mannheim** (2010–2024), anonymized with [ARX Data Anonymization Tool](https://arx.deidentifier.org/) v3.9+.
+The study uses inpatient encounter data from **Universitatsmedizin Mannheim (UMM)** for the period **January 2010 to September 2024**, anonymized with the [ARX Data Anonymization Tool](https://arx.deidentifier.org/) version 3.9.2.
 
-**Required input files** (semicolon-separated CSV, not included for privacy):
+> **Data availability.** The raw data cannot be publicly shared due to data-protection requirements. Source data have been archived and access can be made available for individual requests based on approval of the Ethics and Use and Access Committees. Full project documentation, including R source code, function implementation, and anonymization certificates, is publicly available in this repository under the MIT License.
 
-| File | Description | Columns |
-|------|-------------|---------|
-| `D0.csv` | Original dataset (~720,359 encounters) | `encounter_id; main_diagnosis_icd; los_days` |
-| `D5.csv` | k = 5 anonymized | Same schema |
-| `D10.csv` | k = 10 anonymized | Same schema |
-| `D15.csv` | k = 15 anonymized | Same schema |
+Because of these requirements, **no CSV data files are included** in this repository. To reproduce the analysis, place the following **comma-separated** CSV files in `data/`.
 
-Suppressed values appear as `*` (ARX default). Place all four files in the `data/` directory.
+| File | Description |
+|------|-------------|
+| `D0.csv` | Original (unanonymized) dataset |
+| `D5.csv` | k = 5 anonymized |
+| `D10.csv` | k = 10 anonymized |
+| `D15.csv` | k = 15 anonymized |
+
+**Schema (all four files):**
+
+```
+patient_id, encounter_id, admission_year, main_diagnosis_icd, los_days
+```
+
+- `patient_id` — pseudonymous patient identifier (enables the patient-level random effect)
+- `encounter_id` — unique encounter identifier (direct identifier, removed before anonymization)
+- `admission_year` — year of admission (retained for the temporal-drift check, never anonymized)
+- `main_diagnosis_icd` — primary ICD-10-GM diagnosis code (quasi-identifier)
+- `los_days` — hospital length of stay in days (quasi-identifier and analytical outcome)
+
+Suppressed quasi-identifier cells appear as the token `*` (ARX default). On import, `main_diagnosis_icd` and `los_days` are read as character so the token survives, then `los_days` is coerced to numeric (suppressed values become `NA`). Rows are never dropped.
+
+For `cohort_description.R`, place a single file `original data.csv` in `data/` with the columns `patient_id`, `main_diagnosis_icd`, `los_days` (and admission and discharge timestamps if cohort-level temporal summaries are required).
 
 ---
 
-## Quick Start
+## Quick start
 
-### 1. Configure data paths
+### 1. Configure the data path
 
-In each R script, update the `DATA_DIR` / `path_input` variable to point to your `data/` folder:
+`final_analysis.R` reads its input directory from the `DATA_DIR` variable, which can also be set with the `KANON_DATA_DIR` environment variable without editing the script.
 
 ```r
-# In final_analysis.R (line 45–48):
-DATA_DIR <- file.path("data")
+# Option A: set an environment variable before launching R
+Sys.setenv(KANON_DATA_DIR = "/path/to/your/data")
 
-# In cohort_description.R (line 16):
-path_input <- file.path("data", "original data.csv")
+# Option B: edit DATA_DIR near the top of final_analysis.R
+DATA_DIR <- file.path("data")
 ```
+
+Outputs are written to `OUTPUT_DIR`, which defaults to a `study_results_updated/` subfolder of `DATA_DIR`. Set it to `output/` if you prefer the in-repository location.
 
 ### 2. Run the analysis
 
+From the `R/` directory (so the core function is found via `getwd()`):
+
 ```r
-# Step 1: Source the core function
-source("R/quantify_anonymization_impact.R")
+setwd("R")
 
-# Step 2: Cohort description (optional, standalone)
-source("R/cohort_description.R")
+# Stage 2 (optional, standalone): cohort description
+source("cohort_description.R")
 
-# Step 3: Full analysis (sources Step 1 automatically)
-source("R/final_analysis.R")
+# Stage 3: full impact + reproducibility analysis
+# (this sources quantify_anonymization_impact.R automatically)
+source("final_analysis.R")
+```
+
+To run the unit tests for the core function:
+
+```r
+source("R/test_quantify_anonymization_impact.R")
 ```
 
 ### 3. Inspect outputs
 
-All results are saved to the `output/` directory:
+All results are written to `OUTPUT_DIR`.
 
-**Figures (PDF, 300 DPI):**
-- `Fig1` – Record suppression rates per k-level
-- `Fig2` – KS D effect size trajectory (LOS)
-- `Fig3` – ICD Jaccard overlap + Cramér's V (dual-axis)
-- `Fig4` – Empirical CDF overlay (LOS)
-- `Fig5` – 2×2 summary dashboard panel
-- `Fig6` – Kernel density overlay (LOS)
-- `Fig7` – ICD rank-frequency Zipf plot
-- `Fig8` – Mean/SD shift lollipop chart
-- `Fig9` – Residual QQ-plots (per dataset)
-- `Fig9b` – ICD prevalence + LOS panel (D0/D5/D10/D15)
-- `Fig9e` – BLUP QQ-plots
-- `Fig10–15` – LMM reproducibility: ICC trajectory, BLUP concordance, attenuation, variance decomposition, prediction accuracy, grand mean stability
+**Figures (PNG, 1200 x 1200 px):**
+
+| File | Content |
+|------|---------|
+| `Fig_KS_D_los_days.png` | KS D divergence of LOS across k |
+| `Fig_ICD_quality_metrics.png` | ICD Jaccard overlap and Cramer V (dual axis) |
+| `Fig_ECDF_los_days.png` | Empirical CDF overlay for LOS |
+| `Fig_density_los_days.png` | Kernel density overlay for LOS |
+| `Fig_ICD_zipf_rank.png` | ICD rank-frequency (Zipf) plot |
+| `Fig_los_mean_sd_shifts.png` | Mean and SD shift chart |
+| `Fig_prevalence_los_panel.png` | ICD prevalence and LOS panel per dataset |
+| `Fig_QQ_residuals_D{0,5,10,15}.png` | Residual QQ-plots per dataset |
+| `Fig_QQ_BLUPs_D{0,5,10,15}.png` | ICD-3 random-intercept (BLUP) QQ-plots per dataset |
+| `Fig_ICC_AIC_trajectory.png` | ICC and AIC across k |
+| `Fig_BLUP_concordance_scatter.png` | BLUP concordance, original vs anonymized |
+| `Fig_BLUP_attenuation_ratio.png` | BLUP attenuation ratios across k |
+| `Fig_variance_architecture.png` | Variance decomposition and BLUP fidelity |
+| `Fig_extreme_distortion.png` | Extreme individual BLUP distortions and sign reversals |
+| `Fig_corroboration.png` | Distributional and categorical metrics vs concordance |
 
 **Tables (CSV):**
-- `Table1` – Summary metrics across k-levels
-- `Table2` – NA documentation (ARX-introduced suppressions)
-- `Table3` – LMM comprehensive summary
-- `Table4` – BLUP concordance (Spearman ρ)
-- `Table5` – Variance components
-- `Table6` – BLUP attenuation ratios
-- `Table7` – Fixed effects
-- `Table8` – Prediction accuracy (RMSE/MAE)
-- `Table9` – Model fit comparison (AIC/BIC)
 
-**R objects:**
-- `study_results_full.rds` – Complete results bundle for downstream reuse
+| File | Content |
+|------|---------|
+| `summary_metrics.csv` | KS D, KS z, mean/SD shifts, Jaccard, Cramer V, verdicts |
+| `data_point_removal.csv` | Cell-suppression documentation (no rows deleted) |
+| `suppression_by_year.csv` | Suppression distribution across admission years |
+| `cohort_characterization.csv` | Suppressed vs retained cohort characteristics |
+| `NA_documentation.csv` | ARX-introduced missing values per dataset |
+| `variance_components.csv` | Three-level variance components and ICC |
+| `variance_inflation_interrogation.csv` | Between-diagnosis variance interrogation |
+| `fixed_effects.csv` | Fixed-effect estimates (intercept, grand-mean LOS) |
+| `BLUP_concordance.csv` | Spearman rho and Lin CCC with 95% bootstrap CIs |
+| `BLUP_attenuation.csv` | Per-diagnosis BLUP attenuation ratios |
+| `BLUP_extreme_distortion.csv` | Sign reversals and extreme magnitude changes |
+| `prediction_accuracy.csv` | RMSE and MAE (log and day scales) |
+| `model_fit_comparison.csv` | AIC, BIC, log-likelihood, group counts |
+| `LMM_summary.csv` | Consolidated mixed-model summary |
+| `test_results_report.json` | Internal consistency checks for the run |
+
+**R object:**
+
+- `study_results_full.rds` — complete results bundle for downstream reuse.
 
 ---
 
 ## Methodology
 
-### Core Comparison Function
+### Core comparison function
 
-`quantify_anonymization_impact()` accepts an original and an anonymized data frame and returns:
+`quantify_anonymization_impact()` accepts an original and an anonymized data frame (and optionally a single column pair for an ad-hoc comparison) and returns a named list with column-presence, numeric, categorical, and ad-hoc results.
 
-- **Column presence:** Detects added/removed columns
-- **Numeric analysis:** KS D statistic, √(n_eff)·D signal gauge, min/max/mean/SD shifts
-- **Categorical analysis:** Jaccard overlap ratio, Cramér's V, χ² p-value (shared levels)
-- **Traffic-light verdict:** Green, Yellow, or Red with handling recommendations
+- **Numeric analysis.** KS D statistic, effective sample size n_eff = n1*n2/(n1+n2), scaled statistic z = sqrt(n_eff)*D, and min/max/mean/SD shifts. Counts use doubles to avoid 32-bit integer overflow at large n, and a `z_reason` field records why z is `NA` whenever a precondition fails.
+- **Categorical analysis.** Jaccard overlap ratio (|intersection| / |union|), Cramer V = sqrt(chi2 / (n * min(r-1, c-1))), and a chi-square p-value computed over shared levels only.
+- **Traffic-light verdict.** A green, yellow, or red verdict with handling recommendations. Numeric: green if D < 0.05 and the normalized mean shift <= 0.10 and the SD change is within +/-10%; yellow if D < 0.10 and the normalized mean shift <= 0.30; otherwise red. Categorical: green if Cramer V < 0.10 and Jaccard >= 0.80 and missing-data drift <= 5 percentage points; yellow if Cramer V < 0.30 and Jaccard >= 0.60 and drift <= 10 points; otherwise red.
 
-### Linear Mixed Model (Method subsection)
+### Linear mixed model
 
 ```
-log(los_days + 1) ~ 1 + (1 | icd3)
+log(los_days + 1) ~ year + (1 | icd3) + (1 | patient_id)
 ```
 
-- **Response:** Log-transformed LOS (+1 offset for same-day cases)
-- **Random effect:** Per-ICD-3 intercept (high-cardinality diagnosis groups)
-- **Estimation:** REML for variance components; ML for AIC/BIC comparison
-- **Rationale:** LMM handles hundreds of ICD-3 categories via shrinkage, avoiding the overfitting and instability of fixed-effect GLMs with high-cardinality categorical predictors
+- **Response.** Log-transformed LOS, with a +1 offset for same-day encounters.
+- **Fixed effect.** Admission year, retained to verify that suppression is not concentrated in particular years (temporal-drift check).
+- **Random effects.** A random intercept for the three-character ICD category (`icd3`) and a random intercept for `patient_id`, the latter addressing the non-independence of repeated encounters from the same patient.
+- **Estimation.** REML for variance components, with maximum likelihood used for comparable AIC and BIC.
+- **Rationale.** The mixed model is the measurement instrument for reproducibility, not a predictive model. Its variance components and diagnosis-level best linear unbiased predictions (BLUPs) provide exactly the quantities needed to ask whether the diagnosis-to-LOS signal survives anonymization.
 
-### Reproducibility Assessment (Method subsection)
+### Reproducibility assessment
 
-Five dimensions of reproducibility are evaluated across k-levels:
+The diagnosis-level signal recovered from anonymized data is compared with the original across complementary dimensions.
 
-| Metric | Interpretation |
-|--------|---------------|
-| Spearman ρ (BLUPs) | Rank ordering of diagnosis-specific effects preserved |
-| BLUP attenuation ratio | Effect magnitudes preserved (ratio ≈ 1) |
-| ICC trajectory | Variance architecture preserved |
-| RMSE/MAE stability | Predictive utility preserved |
-| Grand mean stability | No systematic bias from suppression |
+| Quantity | Interpretation |
+|----------|----------------|
+| ICC (diagnosis, patient) | Variance architecture |
+| Spearman rho of BLUPs (95% CI) | Rank ordering of diagnosis-specific effects |
+| Lin concordance correlation coefficient (95% CI) | Magnitude agreement, with precision (Pearson r) and accuracy (Cb) components |
+| BLUP sign reversals and MAD | Individual-effect stability |
+| RMSE, MAE, AIC, BIC | Model fit and prediction accuracy |
+| Grand-mean LOS stability | Systematic bias from suppression |
+
+Confidence intervals for the Spearman correlation and the Lin CCC are obtained by bootstrap (`N_BOOT = 2000`, `set.seed(42)`).
 
 ---
 
 ## Testing
 
-The core function is validated by **30 unit tests** across 10 categories:
+The core function is validated by **42 unit tests** (all passing; see `tests/test_results_report.json`). The test script `R/test_quantify_anonymization_impact.R` sources only the function definition and exercises identity invariants, numeric shift detection, categorical analysis, column-presence handling, vector alignment, backward-compatible argument aliases, verdict logic, helper functions, the return structure, and edge cases.
 
-| Category | Tests | Coverage |
-|----------|-------|----------|
-| Identity Invariants | A01–A06 | Identical data → D=0, V=0, Jaccard=1, Green |
-| Numeric Shift Detection | B01–B06 | Constant shifts, perturbations, variance compression |
-| Categorical Analysis | C01–C05 | Disjoint/partial overlap, single level, missing values |
-| Column Presence | D01–D03 | Added/removed/identical columns |
-| Alignment | E01 | Length-matched comparisons |
-| Backward Compatibility | F01–F02 | Deprecated parameter aliases |
-| Verdict Logic | G01–G03 | Exact verdict string matching |
-| Helper Functions | H01–H05 | `fmt_p`, `icd_chapter`, `los_midpoint` |
-| Return Structure | I01–I05 | All required output keys and sub-elements |
-| Edge Cases | J01–J04 | NULL input, missing ad-hoc, character-only frames |
+```r
+source("R/test_quantify_anonymization_impact.R")
+```
 
-**Result: 30/30 passed** (see `tests/test_results_report.json`).
+---
+
+## Reproducibility notes
+
+- The pipeline is deterministic. The random seed is fixed (`set.seed(42)`) before bootstrapping.
+- The mixed-model fit holds at most one model in memory at a time and checkpoints each dataset's extract to disk, so an interrupted run resumes without refitting completed datasets.
+- Figures are written at 1200 x 1200 px and 150 dpi.
 
 ---
 
 ## Citation
 
-If you use this code, please cite:
+If you use this code, please cite the accompanying paper:
 
 ```bibtex
 @article{kamdjewabo2026anonymization,
   title   = {Quantifying the Impact of Anonymization-Induced Clinical Data Quality
-             Loss: An Advanced Methodological Study Using Primary Diagnosis Codes
+             Loss: A Methodological Case Study Using Primary Diagnosis Codes
              and Hospital Length of Stay},
   author  = {Kamdje Wabo, Gaetan},
   journal = {JMIR Medical Informatics},

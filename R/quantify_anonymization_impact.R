@@ -1,15 +1,16 @@
 # quantify_anonymization_impact()
 # ------------------------------------------------------------
-# R 4.4 compatible, production-ready implementation that mirrors the
+# R 4.4 compatible, production-ready implementation that performs the
 # "Original vs. Anonymized" Assessment
 #
 #  1. Column presence comparison
 #  2. Extended numeric analysis across all common numeric columns
-#     (min / max / mean / SD shifts + KS D, sqrt(n_eff) * D, robust p-formatting)
+#     (min / max / mean / SD shifts + KS D, sqrt(n_eff) * D, p-formatting)
 #  3. Extended categorical analysis across all common categorical columns
 #     (missing delta, Jaccard overlap ratio, chi-square p over shared levels)
 #  4. Ad-hoc single-column comparison with plain-language interpretation and
 #     traffic-light verdict / handling recommendation
+#
 
 #
 # Returns a named list with slots:
@@ -30,7 +31,7 @@ quantify_anonymization_impact <- function(
     comparison_column_anonimzed = NULL
 ) {
   
-  # ---- Deprecated-alias resolution (backward compatibility) ----------------
+  # ----  resolution (backward compatibility) ----------------
   if (is.null(comparison_column_origin)     && !is.null(comparison_column_orgin))
     comparison_column_origin     <- comparison_column_orgin
   if (is.null(comparison_column_anonymized) && !is.null(comparison_column_anonimzed))
@@ -56,18 +57,28 @@ quantify_anonymization_impact <- function(
   # Two-sample KS test (asymptotic approximation; appropriate for large n and
   # when ties are present).  Returns D, the effective sample size n_eff =
   # n1*n2/(n1+n2), the scaled statistic z = sqrt(n_eff)*D (used to gauge
-  # whether the difference is real noise vs. signal), and the asymptotic p.
+  # whether the difference is real noise vs. signal), the asymptotic p, and a
+  # human-readable z_reason documenting why z is NA in any given case.
   #
-  # Guard: requires >= 2 distinct finite values in each sample; otherwise all
-  # output slots are NA.
+  # PATCH: added a  NA guard around z = sqrt(n_eff)*D and a
+  # z_reason field. Every precondition for a finite z is checked; whenever one
+  # fails, z is set to NA and z_reason records the cause. A finite computation
+  # records "ok".
   ks_test_asymp <- function(x, y) {
     x <- x[is.finite(x)]
     y <- y[is.finite(y)]
+    # Use doubles for counts: with large samples nx*ny overflows 32-bit
+    # integers (NA), which would force n_eff (and thus z) to NA.
+    nx <- as.numeric(length(x)); ny <- as.numeric(length(y))
+    
     if (length(unique(x)) < 2L || length(unique(y)) < 2L) {
       return(list(p.value   = NA_real_,
                   statistic = NA_real_,
                   n_eff     = NA_real_,
-                  z         = NA_real_))
+                  z         = NA_real_,
+                  z_reason  = sprintf(
+                    "fewer than 2 distinct finite values (distinct_x=%d, distinct_y=%d)",
+                    length(unique(x)), length(unique(y)))))
     }
     res <- tryCatch(stats::ks.test(x, y, exact = FALSE),
                     error = function(e) NULL)
@@ -75,21 +86,35 @@ quantify_anonymization_impact <- function(
       return(list(p.value   = NA_real_,
                   statistic = NA_real_,
                   n_eff     = NA_real_,
-                  z         = NA_real_))
+                  z         = NA_real_,
+                  z_reason  = "ks.test() failed (degenerate input)"))
     }
-    D     <- unname(res$statistic)
-    n_eff <- length(x) * length(y) / (length(x) + length(y))
-    z     <- sqrt(n_eff) * D
+    D <- unname(res$statistic)
+    
+    # Defensive z computation -------------------------------------------------
+    z <- NA_real_; z_reason <- "ok"
+    if (nx == 0L || ny == 0L) {
+      z_reason <- sprintf("empty sample after non-finite removal (nx=%d, ny=%d)", nx, ny)
+    } else if (!is.finite(D)) {
+      z_reason <- "KS D non-finite"
+    } else {
+      n_eff <- nx * ny / (nx + ny)
+      if (!is.finite(n_eff) || n_eff <= 0) {
+        z_reason <- sprintf("n_eff non-positive or non-finite (n_eff=%s)", format(n_eff))
+      } else {
+        z <- sqrt(n_eff) * D
+        if (!is.finite(z)) { z <- NA_real_; z_reason <- "computed z non-finite (overflow/underflow)" }
+      }
+    }
+    n_eff <- if (nx > 0L && ny > 0L) nx * ny / (nx + ny) else NA_real_
     list(p.value   = unname(res$p.value),
          statistic = D,
          n_eff     = n_eff,
-         z         = z)
+         z         = z,
+         z_reason  = z_reason)
   }
   
   # -- cramers_v_tbl ---------------------------------------------------------
-  # Cramér's V from a pre-built contingency matrix.  Uses the standard
-  # (uncorrected) formula V = sqrt(chi2 / (n * min(r-1, nc-1))).
-  # NOTE: local variable renamed from `c` to `nc` to avoid shadowing base::c().
   cramers_v_tbl <- function(tbl) {
     if (length(dim(tbl)) != 2L || any(dim(tbl) < 2L)) {
       return(list(v = NA_real_, p = NA_real_,
@@ -121,9 +146,6 @@ quantify_anonymization_impact <- function(
   }
   
   # -- safe_stat -------------------------------------------------------------
-  # Applies `fun` to the finite elements of `v`.
-  # `na.rm` is intentionally NOT passed to `fun` because `is.finite()` has
-  # already excluded NA/NaN/Inf; passing na.rm = TRUE would be misleading.
   safe_stat <- function(fun, v) {
     v <- v[is.finite(v)]
     if (length(v) == 0L) return(NA_real_)
@@ -168,8 +190,6 @@ quantify_anonymization_impact <- function(
       orig <- force_num(df_orig[[col]])
       anon <- force_num(df_anon[[col]])
       
-      # Pass finite-only vectors explicitly; ks_test_asymp would guard
-      # internally, but explicit na.omit makes the caller's intent clear.
       ks_out <- ks_test_asymp(orig[is.finite(orig)], anon[is.finite(anon)])
       
       data.frame(
@@ -201,6 +221,7 @@ quantify_anonymization_impact <- function(
         
         KS_D           = ks_out$statistic,
         KS_Z_sqrtNeffD = ks_out$z,
+        KS_Z_reason    = ks_out$z_reason,
         KS_p_value     = fmt_p(ks_out$p.value),
         stringsAsFactors = FALSE
       )
@@ -234,7 +255,6 @@ quantify_anonymization_impact <- function(
       orig_levels <- unique(orig[!is.na(orig) & nzchar(orig)])
       anon_levels <- unique(anon[!is.na(anon) & nzchar(anon)])
       
-      # Jaccard overlap ratio: |intersect| / |union|
       denom_u      <- length(union(orig_levels, anon_levels))
       overlap_ratio <- if (denom_u == 0L) NA_real_
       else length(intersect(orig_levels, anon_levels)) / denom_u
@@ -242,9 +262,6 @@ quantify_anonymization_impact <- function(
       tab_orig <- table(orig)
       tab_anon <- table(anon)
       
-      # Chi-square over shared levels only (mirrors app behaviour).
-      # Categories exclusive to one dataset are not tested here; they are
-      # captured by `Distinct_Delta` and `Overlap_Ratio` instead.
       common_levels <- intersect(names(tab_orig), names(tab_anon))
       chisq_p <- if (length(common_levels) > 1L) {
         tryCatch(
@@ -294,8 +311,6 @@ quantify_anonymization_impact <- function(
     orig_vec <- comparison_column_origin
     anon_vec <- comparison_column_anonymized
     
-    # Capture raw lengths BEFORE alignment so the display table can show the
-    # true row-count delta (previously these were lost).
     n_orig_raw <- length(orig_vec)
     n_anon_raw <- length(anon_vec)
     n_min      <- min(n_orig_raw, n_anon_raw)
@@ -321,9 +336,6 @@ quantify_anonymization_impact <- function(
       n_dist_o <- length(unique(stats::na.omit(x)))
       n_dist_a <- length(unique(stats::na.omit(y)))
       
-      # Mixed-type display table: numeric values are coerced to character
-      # because the last rows hold formatted strings.  This is intentional
-      # (display-only output); numeric precision is preserved in `meta`.
       adhoc_table <- data.frame(
         Metric = c(
           "N total (pre-alignment)", "N total (compared)",
@@ -362,18 +374,18 @@ quantify_anonymization_impact <- function(
       adhoc_table$Original[10L] <- fmt_p(ks_out$p.value)
       
       meta <- list(
-        type      = "numeric",
-        mean_orig = mean(x, na.rm = TRUE),
-        mean_anon = mean(y, na.rm = TRUE),
-        sd_orig   = stats::sd(x, na.rm = TRUE),
-        sd_anon   = stats::sd(y, na.rm = TRUE),
-        ks_p_raw  = ks_out$p.value,
-        ks_D      = ks_out$statistic,
-        ks_z      = ks_out$z,
-        ks_n_eff  = ks_out$n_eff
+        type        = "numeric",
+        mean_orig   = mean(x, na.rm = TRUE),
+        mean_anon   = mean(y, na.rm = TRUE),
+        sd_orig     = stats::sd(x, na.rm = TRUE),
+        sd_anon     = stats::sd(y, na.rm = TRUE),
+        ks_p_raw    = ks_out$p.value,
+        ks_D        = ks_out$statistic,
+        ks_z        = ks_out$z,
+        ks_z_reason = ks_out$z_reason,
+        ks_n_eff    = ks_out$n_eff
       )
       
-      # ---- Traffic-light verdict (thresholds mirror the app) ---------------
       D          <- suppressWarnings(as.numeric(meta$ks_D))
       z          <- suppressWarnings(as.numeric(meta$ks_z))
       mean_shift <- suppressWarnings(as.numeric(meta$mean_anon - meta$mean_orig))
@@ -425,6 +437,7 @@ quantify_anonymization_impact <- function(
         ks = list(
           D           = D,
           z           = z,
+          z_reason    = meta$ks_z_reason,
           n_eff       = meta$ks_n_eff,
           p           = meta$ks_p_raw,
           p_formatted = fmt_p(meta$ks_p_raw)
@@ -470,8 +483,6 @@ quantify_anonymization_impact <- function(
       tab_a    <- table(anon_chr, useNA = "no")
       levels_u <- union(names(tab_o), names(tab_a))
       
-      # Extend both frequency vectors to the full union of level names,
-      # filling absent levels with 0.
       tab_o_u              <- tab_o[levels_u]
       tab_o_u[is.na(tab_o_u)] <- 0L
       tab_a_u              <- tab_a[levels_u]
@@ -519,7 +530,6 @@ quantify_anonymization_impact <- function(
         cramer_v      = as.numeric(v_val)
       )
       
-      # ---- Traffic-light verdict (thresholds mirror the app) ---------------
       v        <- suppressWarnings(as.numeric(meta$cramer_v))
       p        <- suppressWarnings(as.numeric(meta$chi_p))
       overlapN <- suppressWarnings(as.numeric(meta$overlap))
@@ -535,8 +545,6 @@ quantify_anonymization_impact <- function(
       else if (v < 0.30)  "medium"
       else                "large"
       
-      # FIX: was `sprintf("%d%%", round(...))` — `%d` requires integer;
-      # use `%.0f` which correctly accepts numeric.
       overlap_txt <- if (is.na(overlapN)) "n/a"
       else sprintf("%.0f%%", 100 * overlapN)
       
@@ -603,7 +611,8 @@ quantify_anonymization_impact <- function(
       numeric = paste0(
         "Numeric comparison: min/max/mean/SD shifts + KS D (effect size), ",
         "sqrt(n_eff)*D (signal vs. noise gauge), and full-precision asymptotic p. ",
-        "Distinct counts and N-delta use finite values only."
+        "Distinct counts and N-delta use finite values only. ",
+        "KS_Z_reason documents why sqrt(n_eff)*D is NA in any given case."
       ),
       categorical = paste0(
         "Categorical comparison: missing delta, Jaccard overlap ratio ",
@@ -622,17 +631,58 @@ quantify_anonymization_impact <- function(
   )
 }
 
-# ==========================================================================
-# Usage example
-# ==========================================================================
-# result <- quantify_anonymization_impact(
-#   original_dataframe       = demo_original_data,
-#   anonymized_dataframe     = demo_anonymized_data,
-#   comparison_column_origin    = demo_original_data$icd,
-#   comparison_column_anonymized = demo_anonymized_data$icd
-# )
-#
-# result$column_comparison
-# result$numeric_analysis
-# result$categorical_analysis
-# result$adhoc_column_comparison$handling_recommendation$verdict
+
+# ============================================================================
+# Module-level helper functions
+# ----------------------------------------------------------------------------
+# Small utilities used by the analysis and plotting pipeline. They are exposed
+# at the top level so the test suite can exercise them directly. The local
+# fmt_p() inside quantify_anonymization_impact() is mirrored here for reuse.
+# ============================================================================
+
+# -- fmt_p -------------------------------------------------------------------
+# Format a p-value to full IEEE 754 double precision (17 significant digits).
+# Exact zero (underflow) is reported relative to the smallest normal double.
+fmt_p <- function(p) {
+  if (is.na(p))                                   return("NA")
+  if (p == 0 || p < .Machine$double.xmin)
+    return(paste0("< ", format(.Machine$double.xmin, scientific = TRUE)))
+  format(p, digits = 17, scientific = TRUE, trim = TRUE)
+}
+
+# -- icd_chapter -------------------------------------------------------------
+# Map an ICD-10 code to a coarse chapter label by its leading letter.
+# Unmapped letters return "Chap-?". Vectorised over a character vector.
+icd_chapter <- function(icd) {
+  first  <- toupper(substr(as.character(icd), 1L, 1L))
+  labels <- c(
+    A = "Chap-A: Infectious",      B = "Chap-B: Infectious",
+    C = "Chap-C: Neoplasms",       D = "Chap-D: Blood/Neoplasms",
+    E = "Chap-E: Endocrine",       F = "Chap-F: Mental",
+    G = "Chap-G: Nervous",         H = "Chap-H: Eye/Ear",
+    I = "Chap-I: Circulatory",     J = "Chap-J: Respiratory",
+    K = "Chap-K: Digestive",       L = "Chap-L: Skin",
+    M = "Chap-M: Musculoskeletal", N = "Chap-N: Genitourinary",
+    O = "Chap-O: Pregnancy",       P = "Chap-P: Perinatal",
+    Q = "Chap-Q: Congenital",      R = "Chap-R: Symptoms",
+    S = "Chap-S: Injury",          T = "Chap-T: Injury",
+    U = "Chap-U: Special",         V = "Chap-V: External",
+    W = "Chap-W: External",        Y = "Chap-Y: External",
+    Z = "Chap-Z: Factors"
+  )
+  out <- unname(labels[first])
+  out[is.na(out)] <- "Chap-?"
+  out
+}
+
+# -- los_midpoint ------------------------------------------------------------
+# Map a length-of-stay value to the midpoint of its fixed-width bin:
+#   bin_index = floor((los - 1) / w)
+#   midpoint  = bin_index * w + ceiling(w / 2)
+# Example (w = 3): los 1 and 3 -> 2, los 4 and 6 -> 5, los 7 -> 8.
+los_midpoint <- function(los, w) {
+  bin_index <- floor((los - 1L) / w)
+  as.integer(bin_index * w + ceiling(w / 2))
+}
+
+cat("quantify_anonymization_impact() defined.\n\n")
