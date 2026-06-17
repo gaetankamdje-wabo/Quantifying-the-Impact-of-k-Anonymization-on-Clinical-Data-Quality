@@ -33,7 +33,7 @@ open_png <- function(name)
   grDevices::png(file.path(OUTPUT_DIR, name), width = PNG_PX, height = PNG_PX, res = PNG_RES)
 
 # ---- 1) SOURCE THE CORE FUNCTION ------------------------------------------
-source(file.path(getwd(), "quantify_anonymization_impact.R"))
+source(file.path(getwd(), "quantify_anonymization_impact().R"))
 cat("=== quantify_anonymization_impact() loaded ===\n\n")
 
 # ---- 2) IMPORT DATA --------------------------------------------------------
@@ -353,18 +353,30 @@ cat("#  LMM Regression & Reproducibility                                 #\n")
 cat("####################################################################\n\n")
 suppressMessages(library(lme4))
 
-cat("--- ARX-introduced NA documentation ---\n\n")
+# ARX replaces suppressed quasi-identifier cells with the token "*", which is
+# read in as NA (see NA_TOKENS). In the anonymized datasets (D5/D10/D15) every
+# NA in main_diagnosis_icd or los_days is therefore an ARX-suppressed cell, not
+# natural missingness. admission_year is never a quasi-identifier and is never
+# suppressed. D0 is the original dataset, so any NA there reflects true source
+# missingness and serves only as the baseline. We label the counts as
+# "suppressed" for k>0 and report D0 separately as the baseline.
+cat("--- ARX suppression documentation (\"*\" cells read as NA) ---\n\n")
 na_documentation <- data.frame()
 for (idx in seq_along(all_names)) {
   nm <- all_names[idx]; df <- datasets[[nm]]; n <- nrow(df)
-  na_icd <- sum(is.na(df$main_diagnosis_icd)); na_los <- sum(is.na(df$los_days))
-  na_year <- sum(is.na(df$admission_year))
-  na_any <- sum(is.na(df$main_diagnosis_icd)|is.na(df$los_days)|is.na(df$admission_year))
+  supp_icd  <- sum(is.na(df$main_diagnosis_icd))
+  supp_los  <- sum(is.na(df$los_days))
+  supp_year <- sum(is.na(df$admission_year))
+  supp_any  <- sum(is.na(df$main_diagnosis_icd)|is.na(df$los_days)|is.na(df$admission_year))
   na_documentation <- rbind(na_documentation, data.frame(
-    dataset=nm, k_level=all_k[idx], N_rows=n,
-    NA_icd=na_icd, NA_icd_pct=100*na_icd/n, NA_los=na_los, NA_los_pct=100*na_los/n,
-    NA_year=na_year, NA_year_pct=100*na_year/n, NA_any=na_any, NA_any_pct=100*na_any/n,
-    N_complete=n-na_any, N_complete_pct=100*(n-na_any)/n, stringsAsFactors=FALSE))
+    dataset=nm, k_level=all_k[idx],
+    source=ifelse(all_k[idx]==0, "baseline (true missingness)", "ARX suppression (*)"),
+    N_rows=n,
+    suppressed_icd=supp_icd,   suppressed_icd_pct=100*supp_icd/n,
+    suppressed_los=supp_los,   suppressed_los_pct=100*supp_los/n,
+    suppressed_year=supp_year, suppressed_year_pct=100*supp_year/n,
+    suppressed_any=supp_any,   suppressed_any_pct=100*supp_any/n,
+    N_complete=n-supp_any,     N_complete_pct=100*(n-supp_any)/n, stringsAsFactors=FALSE))
 }
 print(na_documentation, row.names = FALSE)
 write.csv(na_documentation, file.path(OUTPUT_DIR, "NA_documentation.csv"), row.names = FALSE)
@@ -743,12 +755,16 @@ js <- function(x){ if(is.null(x)||(length(x)==1&&is.na(x))) return("null")
 kv <- function(k,v) paste0("\"",k,"\": ",v); arr <- function(v) paste0("[", paste(v,collapse=", "), "]")
 tests <- c(
   kv("schema_columns_ok", js(all(c("patient_id","encounter_id","admission_year","main_diagnosis_icd","los_days") %in% colnames(df_D0)))),
-  kv("na_token_star_mapped", js(sum(df_D5$main_diagnosis_icd=="*", na.rm=TRUE)==0)),
+  kv("star_token_mapped_to_NA", js(
+    !any(df_D5$main_diagnosis_icd == "*", na.rm=TRUE) &&    # no literal "*" survives the read
+      sum(is.na(df_D5$main_diagnosis_icd)) > 0)),             # suppression now present as NA
   kv("ks_z_no_nan", js(!any(is.nan(summary_metrics$los_KS_z)))),
   kv("ks_z_all_finite", js(all(is.finite(summary_metrics$los_KS_z)))),
   kv("ks_z_reasons", arr(sapply(summary_metrics$los_KS_z_reason, js))),
   kv("ks_z_values", arr(sapply(summary_metrics$los_KS_z, js))),
-  kv("cell_suppression_detected", js(all(removal_documentation$cells_icd_suppressed > 0))),
+  kv("cell_suppression_detected", js(
+    all(removal_documentation$cells_icd_suppressed > 0) &&
+      all(removal_documentation$encounters_removed == 0))),   # masking, not row deletion
   kv("lmm_has_patient_term", js(all(c("sigma2_patient") %in% colnames(variance_components)) && all(variance_components$sigma2_patient >= 0))),
   kv("lmm_has_year_fixed", js(nrow(r_squared) == length(all_names) && all(is.finite(r_squared$R2_marg)))),
   kv("concordance_has_CIs", js(all(c("spearman_lo","spearman_hi","lin_ccc_lo","lin_ccc_hi") %in% colnames(concordance)))),
